@@ -1,0 +1,22 @@
+{
+  "name": "electpynasa",
+  "version": "1.0.0",
+  "description": "Desktop app for astronomical image processing.",
+  "main": "main.js",
+"scripts": {
+  "start": "electron . --no-sandbox",
+  "test": "echo \"Error: no test specified\" && exit 1"
+},
+  "keywords": [
+    "electron",
+    "python",
+    "astronomy"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^25.0.0"
+  }
+}
+
+

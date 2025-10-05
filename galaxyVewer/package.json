@@ -1,0 +1,29 @@
+{
+  "name": "nasa_space_app_alg",
+  "version": "1.0.0",
+  "description": "",
+  "main": "streamer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XareDev/NASA-Space-app-ALG.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/XareDev/NASA-Space-app-ALG/issues"
+  },
+  "homepage": "https://github.com/XareDev/NASA-Space-app-ALG#readme",
+  "dependencies": {
+    "axios": "^1.12.2",
+    "express": "^5.1.0",
+    "sharp": "^0.34.4",
+    "uuid": "^13.0.0",
+    "ws": "^8.18.3",
+    "xml2js": "^0.6.2",
+    "yargs": "^18.0.0"
+  }
+}
