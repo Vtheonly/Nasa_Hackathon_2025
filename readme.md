@@ -1,8 +1,3 @@
-Of course. That is a critical step for the initial user experience. I will add a dedicated, high-visibility section for this instruction in the `galaxyVewer` setup guide.
-
-Here is the updated, comprehensive `README.md`:
----
-
 # Project electPyNasa & galaxyVewer
 
 **A Submission for the NASA Space Apps Challenge 2025 - Algiers, Boumerdes**
