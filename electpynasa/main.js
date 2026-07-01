@@ -21,6 +21,12 @@ const path = require('path');
 const fs = require('fs');
 
 // ---------------------------------------------------------------------------
+// GPU workaround — prevents black/blank window on Linux
+// ---------------------------------------------------------------------------
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+
+// ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 const APP_NAME = 'electPyNasa';
@@ -50,7 +56,8 @@ function createMainWindow() {
         minHeight: 720,
         backgroundColor: '#0f0f11',
         title: APP_TITLE,
-        show: false,
+        show: true,
+        center: true,
         webPreferences: {
             preload: path.join(PROJECT_ROOT, 'preload.js'),
             contextIsolation: true,
@@ -59,18 +66,35 @@ function createMainWindow() {
         },
     });
 
-    mainWindow.loadFile(path.join(PROJECT_ROOT, 'renderer', 'index.html'));
-
-    mainWindow.once('ready-to-show', () => {
-        mainWindow.show();
+    // Debug: capture all renderer console messages
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+        console.log(`[RENDERER] ${message}`);
     });
+
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.error(`[LOAD FAILED] code=${errorCode} desc=${errorDescription} url=${validatedURL}`);
+    });
+
+    mainWindow.webContents.on('did-finish-load', () => {
+        console.log('[LOAD OK] Page finished loading.');
+    });
+
+    mainWindow.webContents.on('dom-ready', () => {
+        console.log('[DOM READY] DOM is ready.');
+    });
+
+    const htmlPath = path.join(PROJECT_ROOT, 'renderer', 'index.html');
+    console.log(`[DEBUG] Loading file: ${htmlPath}`);
+    console.log(`[DEBUG] File exists: ${fs.existsSync(htmlPath)}`);
+
+    mainWindow.loadFile(htmlPath);
 
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
 
-    // Uncomment for debugging during development:
-    // mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // DevTools open for debugging:
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
 }
 
 app.whenReady().then(() => {

@@ -1,17 +1,17 @@
 /**
- * Viewer — the central component that owns the OpenSeadragon instance.
+ * GalaxyViewer — the central component that owns the OpenSeadragon instance.
  *
  * Responsibilities
  * ----------------
  *   - Construct OpenSeadragon with the resolved configuration
  *   - Wire OpenSeadragon events into the EventBus
- *   - Bridge keyboard / control events back to OpenSeadragon actions
- *   - Expose a tiny imperative API (open, close, zoomIn, zoomOut, home,
- *     fullscreen) for external callers
+ *   - Bridge keyboard / control / POI / AI events back to OSD actions
+ *   - Expose a tiny imperative API (zoomIn, zoomOut, home, flyToPoi,
+ *     toggleFullscreen) for external callers
  *
  * The Viewer is the *only* component that imports OpenSeadragon. Every
  * other UI piece talks to it through the EventBus or via the typed
- * imperative API. This keeps the heavy dependency in one file.
+ * imperative API.
  */
 
 import OpenSeadragon from "openseadragon";
@@ -25,24 +25,33 @@ import { TileLoaderService } from "../services/TileLoaderService";
 import { ViewportService } from "../services/ViewportService";
 import { DziService } from "../services/DziService";
 import type { DziManifest } from "../services/DziService";
+import { PoiService } from "../services/PoiService";
+import { AiService } from "../services/AiService";
+import { VrService } from "../services/VrService";
+import type { Poi } from "../services/PoiService";
 
 export class GalaxyViewer {
   public readonly bus = new EventBus();
   public readonly viewport: ViewportService;
   public readonly tiles: TileLoaderService;
+  public readonly pois: PoiService;
+  public readonly ai: AiService;
+  public readonly vr: VrService;
+  public readonly log: Logger;
+
   private readonly dzi: DziService;
   private osdViewer: OsdViewer | null = null;
   private readonly config: ViewerConfig;
-  private readonly log: Logger;
-  private readonly logger: Logger;
 
   constructor(userConfig: Partial<ViewerConfig>) {
     this.config = mergeConfig(userConfig);
-    this.logger = new Logger(this.bus);
-    this.log = this.logger;
+    this.log = new Logger(this.bus);
     this.viewport = new ViewportService(this.bus, this.log);
     this.tiles = new TileLoaderService(this.bus, this.log);
     this.dzi = new DziService(this.log);
+    this.pois = new PoiService(this.bus, this.log, this.config.poi!);
+    this.ai = new AiService(this.bus, this.log, this.config.ai!, this.pois);
+    this.vr = new VrService(this.bus, this.log, this.config.vr!);
   }
 
   // ------------------------------------------------------------------
@@ -63,24 +72,27 @@ export class GalaxyViewer {
       element: container,
       tileSources: this.toOsdTileSource(manifest),
       prefixUrl: "https://cdn.jsdelivr.net/npm/openseadragon@4.1.1/build/openseadragon/images/",
-      showNavigationControl: false, // we render our own controls
+      showNavigationControl: false,
       showNavigator: this.config.showNavigator,
-      navigatorPosition: "TOP_RIGHT",
-      navigatorSizeRatio: 0.12,
+      navigatorPosition: this.config.navigatorPosition ?? "BOTTOM_RIGHT",
       defaultZoomLevel: this.config.defaultZoomLevel,
       minZoomImageRatio: this.config.minZoomImageRatio,
       maxZoomPixelRatio: this.config.maxZoomPixelRatio,
       fadeInDuration: this.config.fadeInDuration,
-      smoothTileEdgesMinZoom: this.config.smoothTileEdgesMinZoom,
       imageLoaderLimit: this.config.imageLoaderLimit,
       crossOriginPolicy: this.config.crossOriginPolicy === false ? false : this.config.crossOriginPolicy,
+      blendTime: this.config.blendTime,
+      constrainDuringPan: this.config.constrainDuringPan,
       gestureSettingsMouse: { clickToZoom: false, dblClickToZoom: true, flickEnabled: true },
       gestureSettingsTouch: { pinchToZoom: true, flickEnabled: true },
       visibilityRatio: 0.7,
-      constrainDuringPan: true,
     });
 
     this.bindEvents();
+
+    // Load pre-defined POIs (Carina Nebula stars by default)
+    await this.pois.loadInitial();
+
     this.bus.emit(ViewerEvents.Open, { tileSource: manifest });
     this.log.info("GalaxyViewer mounted.");
   }
@@ -111,9 +123,11 @@ export class GalaxyViewer {
   }
 
   panBy(dx: number, dy: number): void {
-    // OpenSeadragon's Point constructor is callable via the default export.
-    const point = new (OpenSeadragon as unknown as { Point: new (x: number, y: number) => OsdPoint }).Point(dx, dy);
-    this.osdViewer?.viewport.panBy(point);
+    if (!this.osdViewer) return;
+    const PointCtor = (OpenSeadragon as unknown as {
+      Point: new (x: number, y: number) => OsdPoint;
+    }).Point;
+    this.osdViewer.viewport.panBy(new PointCtor(dx, dy));
   }
 
   toggleFullscreen(): void {
@@ -122,6 +136,29 @@ export class GalaxyViewer {
     } else {
       this.osdViewer?.setFullPage(true);
     }
+  }
+
+  /**
+   * Fly the viewport to a POI. Called when the Groq agent invokes the
+   * `goToMarker` tool or when the user clicks a marker.
+   */
+  flyToPoi(poi: Poi): void {
+    if (!this.osdViewer) return;
+    const Rect = (OpenSeadragon as unknown as {
+      Rect: new (x: number, y: number, w: number, h: number) => unknown;
+    }).Rect;
+    const half = this.config.poi!.flyToBounds;
+    const bounds = new Rect(poi.x - half, poi.y - half, half * 2, half * 2);
+    // `fitBounds` with immediate=false animates the flight
+    (this.osdViewer.viewport as unknown as {
+      fitBounds: (rect: unknown, immediate: boolean) => void;
+    }).fitBounds(bounds, false);
+    this.log.info(`Flying to POI: ${poi.title}`, { id: poi.id, x: poi.x, y: poi.y });
+  }
+
+  /** Returns the underlying OSD viewer (used by the PoiOverlay for addOverlay). */
+  getOsdViewer(): OsdViewer | null {
+    return this.osdViewer;
   }
 
   // ------------------------------------------------------------------
@@ -138,8 +175,6 @@ export class GalaxyViewer {
   }
 
   private toOsdTileSource(manifest: DziManifest): OsdTileSource {
-    // OpenSeadragon accepts a configured tile-source object with a custom
-    // getTileUrl callback. We build it from the parsed DZI manifest.
     const m = manifest;
     return {
       height: m.height,
@@ -169,12 +204,11 @@ export class GalaxyViewer {
 
     v.addHandler("pan", (e: { center?: { x: number; y: number } } | Record<string, unknown>) => {
       const center = (e as { center?: { x: number; y: number } }).center;
-      if (center) {
-        this.viewport.update({ panX: center.x, panY: center.y });
-      }
+      if (center) this.viewport.update({ panX: center.x, panY: center.y });
     });
 
     v.addHandler("animation", () => {
+      if (!v) return;
       const vp = v.viewport;
       const bounds = vp.getBounds();
       this.viewport.update({
@@ -186,29 +220,19 @@ export class GalaxyViewer {
       });
     });
 
-    // Tile load tracking — OpenSeadragon fires these per tile.
-    try {
-      v.world?.getItemAt?.(0)?.addHandler?.("tiled-image-level-loaded", () => {
-        this.tiles.onTileLoaded();
-      });
-    } catch {
-      // Safe no-op — some OSD versions don't expose this event.
-    }
-
     v.addHandler("tile-load-failed", () => {
       this.tiles.onTileFailed();
     });
 
-    v.addHandler("tile-drawing", () => {
-      // intentionally empty — drawing is per-frame, not per-load
-    });
+    // Bridge keyboard events from the EventBus
+    this.bus.on<{ dx: number; dy: number }>(ViewerEvents.KeyboardPan, (p) => this.panBy(p.dx, p.dy));
+    this.bus.on(ViewerEvents.KeyboardZoomIn, () => this.zoomIn());
+    this.bus.on(ViewerEvents.KeyboardZoomOut, () => this.zoomOut());
+    this.bus.on(ViewerEvents.KeyboardHome, () => this.home());
+    this.bus.on(ViewerEvents.KeyboardFullscreen, () => this.toggleFullscreen());
 
-    // Bridge keyboard events from the EventBus.
-    this.bus.on<{ dx: number; dy: number }>("keyboard:pan", (p) => this.panBy(p.dx, p.dy));
-    this.bus.on("keyboard:zoom-in", () => this.zoomIn());
-    this.bus.on("keyboard:zoom-out", () => this.zoomOut());
-    this.bus.on("keyboard:home", () => this.home());
-    this.bus.on("keyboard:fullscreen", () => this.toggleFullscreen());
+    // Bridge POI fly-to events (from the Groq agent / click handler)
+    this.bus.on<Poi>(ViewerEvents.PoiFlyTo, (poi) => this.flyToPoi(poi));
 
     // Resize handling
     window.addEventListener("resize", () => {

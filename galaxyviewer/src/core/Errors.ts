@@ -45,3 +45,21 @@ export class ViewportError extends GalaxyViewerError {
     super(message, "VIEWPORT_ERROR", context);
   }
 }
+
+export class PoiError extends GalaxyViewerError {
+  constructor(message: string, context: Record<string, unknown> = {}) {
+    super(message, "POI_ERROR", context);
+  }
+}
+
+export class AiError extends GalaxyViewerError {
+  constructor(message: string, context: Record<string, unknown> = {}) {
+    super(message, "AI_ERROR", context);
+  }
+}
+
+export class VrError extends GalaxyViewerError {
+  constructor(message: string, context: Record<string, unknown> = {}) {
+    super(message, "VR_ERROR", context);
+  }
+}

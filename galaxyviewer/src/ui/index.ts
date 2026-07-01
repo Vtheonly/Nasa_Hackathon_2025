@@ -4,3 +4,6 @@ export * from "./Controls";
 export * from "./ProgressBar";
 export * from "./StatusBar";
 export * from "./HelpOverlay";
+export * from "./PoiOverlay";
+export * from "./PoiModal";
+export * from "./ChatPanel";

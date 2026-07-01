@@ -1,10 +1,7 @@
 /**
  * Theme — centralised design tokens.
  *
- * Keeping the palette, spacing, and typography in one place makes the
- * viewer trivially re-themeable. The values are exposed both as TypeScript
- * constants (for inline styles in components) and as CSS custom properties
- * (for stylesheets).
+ * The cyan-on-dark "space" aesthetic matches the original GalaxyViewer.
  */
 
 export interface ThemeTokens {
@@ -16,6 +13,7 @@ export interface ThemeTokens {
   textMuted: string;
   accent: string;
   accentHover: string;
+  accentGlow: string;
   success: string;
   warning: string;
   error: string;
@@ -26,42 +24,25 @@ export interface ThemeTokens {
 }
 
 export const DARK_THEME: ThemeTokens = {
-  bgCanvas: "#05070d",
-  bgChrome: "rgba(15, 18, 28, 0.85)",
-  bgChromeHover: "rgba(30, 34, 48, 0.95)",
-  textPrimary: "#f1f1f3",
-  textSecondary: "#b9bfcc",
+  bgCanvas: "#0a0a1a",
+  bgChrome: "rgba(10, 20, 40, 0.85)",
+  bgChromeHover: "rgba(20, 35, 60, 0.95)",
+  textPrimary: "#e0f7ff",
+  textSecondary: "#b9c5d6",
   textMuted: "#6c7178",
-  accent: "#5aa8ff",
-  accentHover: "#88c0ff",
+  accent: "#00ffff",
+  accentHover: "#88f8ff",
+  accentGlow: "rgba(0, 255, 255, 0.5)",
   success: "#4ade80",
   warning: "#f5a623",
   error: "#ff5a5a",
-  border: "rgba(255, 255, 255, 0.08)",
-  radius: "8px",
+  border: "rgba(0, 255, 255, 0.2)",
+  radius: "12px",
   fontStack: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   fontMono: '"SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace',
 };
 
-export const LIGHT_THEME: ThemeTokens = {
-  bgCanvas: "#f4f5f7",
-  bgChrome: "rgba(255, 255, 255, 0.92)",
-  bgChromeHover: "rgba(245, 247, 250, 1)",
-  textPrimary: "#0c1322",
-  textSecondary: "#3a4356",
-  textMuted: "#6c7178",
-  accent: "#0066cc",
-  accentHover: "#0050a8",
-  success: "#15803d",
-  warning: "#b45309",
-  error: "#dc2626",
-  border: "rgba(0, 0, 0, 0.08)",
-  radius: "8px",
-  fontStack: DARK_THEME.fontStack,
-  fontMono: DARK_THEME.fontMono,
-};
-
-export function installTheme(tokens: ThemeTokens): void {
+export function installTheme(tokens: ThemeTokens = DARK_THEME): void {
   const root = document.documentElement;
   root.style.setProperty("--gv-bg-canvas", tokens.bgCanvas);
   root.style.setProperty("--gv-bg-chrome", tokens.bgChrome);
@@ -71,6 +52,7 @@ export function installTheme(tokens: ThemeTokens): void {
   root.style.setProperty("--gv-text-muted", tokens.textMuted);
   root.style.setProperty("--gv-accent", tokens.accent);
   root.style.setProperty("--gv-accent-hover", tokens.accentHover);
+  root.style.setProperty("--gv-accent-glow", tokens.accentGlow);
   root.style.setProperty("--gv-success", tokens.success);
   root.style.setProperty("--gv-warning", tokens.warning);
   root.style.setProperty("--gv-error", tokens.error);

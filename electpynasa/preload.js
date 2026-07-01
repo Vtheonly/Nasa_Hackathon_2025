@@ -6,60 +6,63 @@
  * Exposes a single, minimal, audited API surface on ``window.electpynasa``
  * so the renderer cannot accidentally touch Node APIs directly.
  *
- * Every method is a thin promise-returning wrapper around
- * ``ipcRenderer.invoke``. No event emitters, no synchronous IPC, no
- * passthrough of native objects — except ``childProcess.spawn`` which is
- * required to stream Python pipeline output line-by-line.
+ * Pipeline execution is delegated to the main process via IPC
+ * (``pipeline:run``). The renderer sends the script path and args; the main
+ * process spawns the Python child and streams structured output back via
+ * ``pipeline:stdout``, ``pipeline:stderr``, and ``pipeline:close`` events.
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
-const { spawn } = require('child_process');
-const process = require('process');
 
 contextBridge.exposeInMainWorld('electpynasa', {
     /**
      * Open a native file-picker dialog and return the selected path
      * (or null if cancelled).
-     * @param {Object} [options]
-     * @param {Array<{name: string, extensions: string[]}>} [options.filters]
-     * @param {string} [options.title]
-     * @returns {Promise<string|null>}
      */
     selectFile: (options) => ipcRenderer.invoke('dialog:openFile', options || {}),
 
     /**
      * Resolve the Python interpreter to use.
-     * @returns {Promise<string>}
      */
     resolvePython: () => ipcRenderer.invoke('env:resolvePython'),
 
     /**
      * Resolve a script path under scripts/.
-     * @param {string} scriptRelativePath  e.g. 'ghs_stretch_grayscale.py'
-     * @returns {Promise<string>}
      */
     resolveScript: (scriptRelativePath) =>
         ipcRenderer.invoke('env:resolveScript', scriptRelativePath),
 
     /**
      * Return the PYTHONPATH that should be set when spawning Python scripts.
-     * @returns {Promise<string>}
      */
     pythonPath: () => ipcRenderer.invoke('env:pythonPath'),
 
     /**
-     * Spawned-process facade. Exposed so the renderer can stream pipeline
-     * stdout line-by-line in real time. Only `spawn` is exposed — `exec`,
-     * `execFile`, and `fork` are intentionally omitted to keep the attack
-     * surface minimal.
+     * Run a pipeline in the main process. Returns a pipeline ID.
+     * The main process spawns the Python child and sends output back
+     * via events.
      */
-    childProcess: { spawn },
+    runPipeline: (scriptRelativePath, args) =>
+        ipcRenderer.invoke('pipeline:run', scriptRelativePath, args),
 
     /**
-     * Process facade (for `process.env` / `process.platform` only).
+     * Listen for pipeline stdout lines from the main process.
      */
-    process: {
-        env: process.env,
-        platform: process.platform,
+    onPipelineStdout: (callback) => {
+        ipcRenderer.on('pipeline:stdout', (event, line) => callback(line));
+    },
+
+    /**
+     * Listen for pipeline stderr lines from the main process.
+     */
+    onPipelineStderr: (callback) => {
+        ipcRenderer.on('pipeline:stderr', (event, line) => callback(line));
+    },
+
+    /**
+     * Listen for pipeline close events from the main process.
+     */
+    onPipelineClose: (callback) => {
+        ipcRenderer.on('pipeline:close', (event, code) => callback(code));
     },
 });
