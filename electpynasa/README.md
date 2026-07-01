@@ -41,52 +41,50 @@ The library is shipped as a Python package (`electpynasa/`) plus a thin Electron
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph ElectronApp["Electron App (renderer + main)"]
-        direction LR
-        HTML["renderer/index.html"] <--> APP_JS["renderer/app.js"]
-        APP_JS <--> Preload["preload.js (context bridge)"]
-        Preload --> Main["main.js (IPC handlers)"]
-    end
-
-    subgraph PythonPkg["Python Package (electpynasa/)"]
-        direction TB
-        Scripts["scripts/<br/>(Thin shims)"] --> CLI["cli/<br/>(Argparse entry points)"]
-        CLI --> Pipelines["pipelines/<br/>(High-level orchestration)"]
-        Pipelines --> Processing["processing/<br/>(Strategy implementations)"]
-        
-        subgraph Strategies["Strategies"]
-            direction TB
-            Stretch["stretching: GHS, Arcsinh, Logarithmic"]
-            Norm["normalization: Percentile"]
-            Protect["protection: Shadow / Highlight"]
-            Reg["registration: Astroalign ➜ ECC ➜ ORB"]
-            Balance["balancing: Lupton"]
-        end
-        Processing --> Strategies
-        
-        Strategies --> IO["io/<br/>(loaders, writers, validators)"]
-        IO --> Core["core/<br/>(ABCs, pipeline base, types)"]
-        Core --> UtilsConfig["config/ and utils/<br/>(Logger, validation, filesystem)"]
-    end
-
-    Main -- "spawn(python3, script, ...args)" --> Scripts
+```
+┌──────────────────────── Electron app (renderer + main) ────────────────────────┐
+│  renderer/index.html  ◀──▶  renderer/app.js  ◀──▶  preload.js (context bridge) │
+│                                                              │                  │
+│                                                              ▼                  │
+│                                                       main.js (IPC handlers)   │
+└──────────────────────────────────────────────────────────────┬──────────────────┘
+                                                               │ spawn(python3, [script, ...args])
+                                                               ▼
+┌──────────────────────────── Python package (electpynasa/) ─────────────────────┐
+│                                                                                 │
+│  scripts/          Thin backward-compatible shims (delegate to cli/)            │
+│       ▼                                                                         │
+│  cli/              argparse entry points: grayscale.py, composite.py,           │
+│                    pyramid.py                                                   │
+│       ▼                                                                         │
+│  pipelines/        High-level orchestration: GrayscalePipeline,                 │
+│                    CompositePipeline, PyramidPipeline                           │
+│       ▼                                                                         │
+│  processing/       Strategy implementations:                                    │
+│   ├── stretching/    GHS, Arcsinh, Logarithmic                                  │
+│   ├── normalization/ Percentile                                                 │
+│   ├── protection/    Shadow / Highlight                                          │
+│   ├── registration/  Astroalign → ECC → ORB (cascading chain)                   │
+│   └── balancing/     Lupton (background-neutralize + white-point + saturation)  │
+│       ▼                                                                         │
+│  io/               ImageLoader (FITS/TIFF), TIFFWriter, OpenCVWriter            │
+│       ▼                                                                         │
+│  core/             ABCs (interfaces.py), Pipeline base, types, exceptions       │
+│  utils/            ScientificLogger (structured JSON), filesystem, sanity       │
+│  config/           Frozen dataclasses with built-in validation                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Layered dependencies
 
 Each layer may only import from the layer immediately below it. This keeps the dependency graph acyclic and makes it trivial to swap any layer in isolation.
 
-```mermaid
-flowchart LR
-    cli["cli"] --> pipelines["pipelines"]
-    pipelines --> processing["processing"]
-    processing --> core["core"]
-    processing --> io["io"]
-    processing --> config["config"]
-    io --> core
-    config --> utils["utils"]
+```
+cli          ─▶ pipelines ─▶ processing ─▶ core
+                              │              │
+                              └▶ io ─────────┘
+                              │
+                              └▶ config ─▶ utils
 ```
 
 ---
@@ -180,45 +178,27 @@ electpynasa/
 
 Single FITS/TIFF image → percentile normalization → Generalized Hyperbolic Stretch → shadow/highlight protection → 32-bit float TIFF.
 
-```mermaid
-flowchart LR
-    INPUT([INPUT]) --> load[load]
-    load --> normalize[normalize]
-    normalize --> stretch[stretch]
-    stretch --> protect[protect]
-    protect --> write[write]
-    write --> OUTPUT([OUTPUT: _grayscale.tif])
+```
+INPUT  ─▶ load ─▶ normalize ─▶ stretch ─▶ protect ─▶ write ─▶ OUTPUT (_grayscale.tif)
 ```
 
 ### 2. Color Composite Pipeline (`CompositePipeline`)
 
 Three FITS/TIFF channels (R/G/B) → per-channel normalize + GHS + protect → register R&B to G (astroalign → ECC → ORB cascade) → stack to 32-bit HDR TIFF → Lupton smart color balance → 8-bit preview TIFF.
 
-```mermaid
-flowchart LR
-    R([R]) --> load[load]
-    G([G]) --> load
-    B([B]) --> load
-    load --> stretch[stretch]
-    stretch --> register["register(R, B ➜ G)"]
-    register --> write_hdr[write_hdr]
-    write_hdr --> balance[balance]
-    balance --> OUTPUT_HDR([OUTPUT: _color_32bit.tiff])
-    balance --> OUTPUT_PREVIEW([OUTPUT: _color_8bit_preview.tiff])
+```
+R ─┐
+G ─┼─▶ load ─▶ stretch ─▶ register(R,B → G) ─▶ write_hdr ─▶ balance ─▶ OUTPUT
+B ─┘                                                              ├─ _color_32bit.tiff
+                                                                  └─ _color_8bit_preview.tiff
 ```
 
 ### 3. DZI Pyramid Pipeline (`PyramidPipeline`)
 
 Large TIFF/JPEG/PNG/WebP → libvips `dzsave` → Deep Zoom Image pyramid (multi-resolution tile tree + `.dzi` manifest).
 
-```mermaid
-flowchart LR
-    INPUT([INPUT]) --> validate[validate]
-    validate --> check_vips[check_vips]
-    check_vips --> prepare_output[prepare_output]
-    prepare_output --> run_dzsave[run_dzsave]
-    run_dzsave --> finalize[finalize]
-    finalize --> OUTPUT([OUTPUT: .dzi + tiles/])
+```
+INPUT ─▶ validate ─▶ check_vips ─▶ prepare_output ─▶ run_dzsave ─▶ finalize ─▶ OUTPUT (.dzi + tiles/)
 ```
 
 ---

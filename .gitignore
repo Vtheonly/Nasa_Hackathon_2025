@@ -1,0 +1,127 @@
+# ===================================================================
+# Combined .gitignore for the Nasa_Hackathon_2025 monorepo
+# Covers Python, Node, Vite, Electron, Jupyter, and OS cruft.
+# ===================================================================
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+develop-eggs/
+downloads/
+parts/
+sdist/
+wheels/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints
+
+# ----- Node / npm / Vite -----
+node_modules/
+.npm
+.pnpm-store/
+.yarn/
+*.tsbuildinfo
+
+# Vite / dist artifacts
+dist/
+dist-ssr/
+*.local
+
+# Vite temp
+.vite/
+
+# Electron build artifacts
+out/
+release/
+*.app/
+*.exe
+*.dmg
+
+# ----- TypeScript -----
+# (TypeScript itself produces no artifacts when `noEmit` is set, but
+# downstream tools like tsbuildinfo are ignored above.)
+
+# ----- Logs -----
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ----- OS / Editor cruft -----
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ----- Environment / secrets -----
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+mast_token.txt
+
+# ----- Project-specific: large data -----
+# Don't commit huge FITS/TIFF/pyramids to git — use Git LFS or external storage.
+*.fits
+*.fit
+*.tif
+*.tiff
+*.dzi
+*_files/
+deepzoom-images/
+space_data/
+workspace/
+electpynasa_pyramid.zip
+*.part
+
+# Allow test fixtures through (small synthetic files used by pytest)
+!electpynasa/tests/**/*.fits
+!electpynasa/tests/**/*.tif
+!electpynasa/tests/**/*.tiff
